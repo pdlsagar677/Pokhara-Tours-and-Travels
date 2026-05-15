@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -13,7 +14,9 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-app.use(helmet());
+// CSP off: Next.js's exported HTML uses inline runtime scripts that helmet's
+// strict default CSP would block. Other helmet protections stay on.
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 
 // Custom morgan URL token that redacts credential-like query params so they
@@ -67,7 +70,13 @@ app.get('/api/health', (_req, res) => {
   res.json({ data: { status: 'ok', service: 'pokhara-tours-api' } });
 });
 
-app.use(maintenanceCheck);
+// Maintenance gate applies only to API traffic. Static HTML pages must still
+// load during maintenance so users can see the maintenance message rendered
+// by the frontend from the API's 503 response.
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) return maintenanceCheck(req, res, next);
+  return next();
+});
 
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
@@ -79,7 +88,31 @@ app.use('/api/newsletter', require('./routes/newsletter.routes'));
 app.use('/api/settings', require('./routes/settings.routes'));
 app.use('/api/ai', require('./routes/ai.routes'));
 
-app.use(notFound);
+// JSON 404 for unmatched API routes; non-/api routes fall through to static.
+app.use('/api', notFound);
+
+// Static frontend (Next.js `output: 'export'` build). With `trailingSlash: true`
+// each route is exported as <route>/index.html, which express.static serves
+// natively.
+const FRONTEND_OUT = path.resolve(__dirname, '../../frontend/out');
+app.use(
+  express.static(FRONTEND_OUT, {
+    extensions: ['html'],
+    index: 'index.html',
+    maxAge: '1h',
+  })
+);
+
+// Unknown non-/api GET → serve Next's exported 404.html so users see the
+// styled error page instead of a blank Express default.
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  return res.status(404).sendFile(path.join(FRONTEND_OUT, '404.html'), (err) => {
+    if (err) next(err);
+  });
+});
+
 app.use(errorHandler);
 
 module.exports = app;

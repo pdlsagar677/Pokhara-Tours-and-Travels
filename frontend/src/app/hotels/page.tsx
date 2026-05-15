@@ -3,7 +3,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import DestinationsClient from "@/app/destinations/DestinationsClient";
-import type { Package } from "@/types";
 
 export const metadata: Metadata = {
   title: "Hotels in Nepal — Pokhara Tours and Travel",
@@ -11,25 +10,7 @@ export const metadata: Metadata = {
     "Boutique lodges, lakeside hotels, and mountain retreats. Book your stay across Pokhara, Kathmandu, Chitwan and beyond.",
 };
 
-export const dynamic = "force-dynamic";
-
-async function getHotels(): Promise<Package[]> {
-  const baseURL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
-  try {
-    const res = await fetch(`${baseURL}/api/packages?type=hotel`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    const json = (await res.json()) as { data?: Package[] };
-    return json.data ?? [];
-  } catch {
-    return [];
-  }
-}
-
-export default async function HotelsPage() {
-  const initialPackages = await getHotels();
-
+export default function HotelsPage() {
   return (
     <>
       <section className="relative h-[50vh] min-h-[360px] w-full overflow-hidden">
@@ -64,10 +45,7 @@ export default async function HotelsPage() {
 
       <section className="bg-soft py-16">
         <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <DestinationsClient
-            initialPackages={initialPackages}
-            filterType="hotel"
-          />
+          <DestinationsClient filterType="hotel" />
         </div>
       </section>
     </>

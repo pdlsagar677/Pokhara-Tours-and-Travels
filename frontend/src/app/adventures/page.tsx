@@ -3,7 +3,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import DestinationsClient from "@/app/destinations/DestinationsClient";
-import type { Package } from "@/types";
 
 export const metadata: Metadata = {
   title: "Adventures in Nepal — Pokhara Tours and Travel",
@@ -11,25 +10,7 @@ export const metadata: Metadata = {
     "Paragliding, white-water rafting, bungee, ziplining, mountain biking. Book adrenaline-packed adventures across Nepal.",
 };
 
-export const dynamic = "force-dynamic";
-
-async function getAdventures(): Promise<Package[]> {
-  const baseURL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
-  try {
-    const res = await fetch(`${baseURL}/api/packages?type=adventure`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    const json = (await res.json()) as { data?: Package[] };
-    return json.data ?? [];
-  } catch {
-    return [];
-  }
-}
-
-export default async function AdventuresPage() {
-  const initialPackages = await getAdventures();
-
+export default function AdventuresPage() {
   return (
     <>
       <section className="relative h-[50vh] min-h-[360px] w-full overflow-hidden">
@@ -64,10 +45,7 @@ export default async function AdventuresPage() {
 
       <section className="bg-soft py-16">
         <div className="mx-auto max-w-7xl px-4 md:px-8">
-          <DestinationsClient
-            initialPackages={initialPackages}
-            filterType="adventure"
-          />
+          <DestinationsClient filterType="adventure" />
         </div>
       </section>
     </>
