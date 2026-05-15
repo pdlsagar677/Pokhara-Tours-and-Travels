@@ -67,10 +67,10 @@ export const authService = {
     return res.data.data;
   },
 
-  async verifyEmail(params: { token: string; id: string }): Promise<VerifyResult> {
-    const res = await apiClient.get<{ data: VerifyResult }>(
+  async verifyEmail(payload: { email: string; otp: string }): Promise<VerifyResult> {
+    const res = await apiClient.post<{ data: VerifyResult }>(
       "/api/auth/verify-email",
-      { params }
+      payload
     );
     return res.data.data;
   },

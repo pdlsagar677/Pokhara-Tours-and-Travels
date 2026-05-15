@@ -2,22 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, EyeOff, Loader2, MailCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { registerSchema, type RegisterInput } from "@/lib/validators/auth.schema";
 import { useAuthStore } from "@/store/auth.store";
 import { extractApiError } from "@/lib/api/client";
 
 export default function RegisterForm() {
+  const router = useRouter();
   const registerUser = useAuthStore((s) => s.register);
-  const resendVerification = useAuthStore((s) => s.resendVerification);
 
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
-  const [resending, setResending] = useState(false);
-  const [resentMessage, setResentMessage] = useState<string | null>(null);
 
   const {
     register,
@@ -45,64 +43,11 @@ export default function RegisterForm() {
         phone: values.phone,
         password: values.password,
       });
-      setSubmittedEmail(values.email);
+      router.push(`/verify-email/?email=${encodeURIComponent(values.email)}`);
     } catch (err) {
       setServerError(extractApiError(err, "Unable to create account"));
     }
   };
-
-  const onResend = async () => {
-    if (!submittedEmail) return;
-    setResending(true);
-    setResentMessage(null);
-    try {
-      await resendVerification(submittedEmail);
-      setResentMessage("Verification email sent. Please check your inbox.");
-    } catch (err) {
-      setResentMessage(extractApiError(err, "Could not resend right now"));
-    } finally {
-      setResending(false);
-    }
-  };
-
-  if (submittedEmail) {
-    return (
-      <div className="rounded-2xl border border-brand/20 bg-brand-light/40 p-6 text-center">
-        <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white">
-          <MailCheck className="h-6 w-6" />
-        </div>
-        <h2 className="mt-4 font-display text-xl font-extrabold text-ink">
-          Check your inbox
-        </h2>
-        <p className="mt-2 text-sm text-muted">
-          We&apos;ve sent a verification link to{" "}
-          <span className="font-semibold text-ink">{submittedEmail}</span>.
-          Click the link to activate your account.
-        </p>
-        <p className="mt-4 text-xs text-muted">
-          Don&apos;t see it? Check your spam folder, or
-        </p>
-        <button
-          type="button"
-          onClick={onResend}
-          disabled={resending}
-          className="mt-2 inline-flex items-center gap-2 rounded-full border border-brand/40 bg-white px-4 py-2 text-sm font-semibold text-brand hover:bg-brand-light transition disabled:opacity-60"
-        >
-          {resending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Resend verification email
-        </button>
-        {resentMessage && (
-          <p className="mt-3 text-xs text-ink">{resentMessage}</p>
-        )}
-        <p className="mt-6 text-xs text-muted">
-          Already verified?{" "}
-          <Link href="/login" className="font-semibold text-brand hover:text-brand-dark">
-            Sign in
-          </Link>
-        </p>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

@@ -24,8 +24,8 @@ const {
   refreshCookieOptions,
 } = require('../utils/tokens');
 
-const VERIFY_TOKEN_TTL_HOURS = parseInt(process.env.EMAIL_VERIFY_TTL_HOURS, 10) || 24;
-const VERIFY_TOKEN_TTL_MS = VERIFY_TOKEN_TTL_HOURS * 60 * 60 * 1000;
+const EMAIL_VERIFY_OTP_TTL_MIN = parseInt(process.env.EMAIL_VERIFY_OTP_TTL_MIN, 10) || 15;
+const EMAIL_VERIFY_OTP_TTL_MS = EMAIL_VERIFY_OTP_TTL_MIN * 60 * 1000;
 const PASSWORD_OTP_TTL_MIN = 10;
 const PASSWORD_OTP_TTL_MS = PASSWORD_OTP_TTL_MIN * 60 * 1000;
 const PASSWORD_RESET_TTL_MIN = 60;
@@ -112,14 +112,17 @@ async function issueSessionAndReturnAccess(user, req, res) {
 }
 
 async function generateAndSendVerification(user) {
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  user.emailVerifyTokenHash = await bcrypt.hash(rawToken, 12);
-  user.emailVerifyTokenExpires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS);
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  user.emailVerifyOtpHash = await bcrypt.hash(otp, 12);
+  user.emailVerifyOtpExpires = new Date(Date.now() + EMAIL_VERIFY_OTP_TTL_MS);
   await user.save();
 
-  const base = process.env.CLIENT_URL || 'http://localhost:3000';
-  const verifyUrl = `${base}/verify-email?token=${rawToken}&id=${user._id.toString()}`;
-  await sendVerificationEmail({ to: user.email, name: user.name, verifyUrl });
+  await sendVerificationEmail({
+    to: user.email,
+    name: user.name,
+    otp,
+    ttlMinutes: EMAIL_VERIFY_OTP_TTL_MIN,
+  });
 }
 
 async function register(req, res, next) {
@@ -295,41 +298,55 @@ async function loginTwoFactor(req, res, next) {
 
 async function verifyEmail(req, res, next) {
   try {
-    const token = (req.query.token || '').toString();
-    const id = (req.query.id || '').toString();
-    if (!token || !id) {
-      return res.status(400).json({ error: 'Missing verification parameters' });
+    const email = (req.body?.email || '').trim().toLowerCase();
+    const otp = (req.body?.otp || '').toString().trim();
+
+    if (!email || !isEmail(email)) {
+      return res.status(400).json({ error: 'Enter a valid email' });
+    }
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: 'Enter the 6-digit code from your email' });
     }
 
-    const user = await User.findById(id).select(
-      '+emailVerifyTokenHash +sessions'
+    const user = await User.findOne({ email }).select(
+      '+emailVerifyOtpHash +emailVerifyOtpExpires +sessions'
     );
     if (!user) {
-      return res.status(400).json({ error: 'Invalid verification link' });
+      // Don't disclose whether the email is registered.
+      return res.status(400).json({ error: 'Invalid or expired code' });
     }
     if (user.isEmailVerified) {
       return res.status(200).json({
         data: { user: user.toPublic(), alreadyVerified: true },
       });
     }
-    if (!user.emailVerifyTokenHash || !user.emailVerifyTokenExpires) {
+    if (!user.emailVerifyOtpHash || !user.emailVerifyOtpExpires) {
       return res.status(400).json({ error: 'No verification pending for this account' });
     }
-    if (user.emailVerifyTokenExpires < new Date()) {
+    if (user.emailVerifyOtpExpires < new Date()) {
+      // Clear the stale OTP so the user is forced to request a new one.
+      user.emailVerifyOtpHash = null;
+      user.emailVerifyOtpExpires = null;
+      await user.save();
       return res.status(400).json({
-        error: 'Verification link has expired. Please request a new one.',
+        error: 'Verification code has expired. Please request a new one.',
         code: 'VERIFY_EXPIRED',
       });
     }
 
-    const matches = await bcrypt.compare(token, user.emailVerifyTokenHash);
+    const matches = await bcrypt.compare(otp, user.emailVerifyOtpHash);
+
+    // Single-shot: clear the OTP whether it matched or not, to prevent
+    // brute-forcing a 6-digit code. Matches the password-change OTP pattern.
+    user.emailVerifyOtpHash = null;
+    user.emailVerifyOtpExpires = null;
+
     if (!matches) {
-      return res.status(400).json({ error: 'Invalid verification link' });
+      await user.save();
+      return res.status(400).json({ error: 'Invalid or expired code' });
     }
 
     user.isEmailVerified = true;
-    user.emailVerifyTokenHash = null;
-    user.emailVerifyTokenExpires = null;
     await user.save();
 
     const accessToken = await issueSessionAndReturnAccess(user, req, res);
@@ -346,7 +363,7 @@ async function resendVerification(req, res, next) {
       return res.status(400).json({ error: 'Enter a valid email' });
     }
 
-    const user = await User.findOne({ email }).select('+emailVerifyTokenHash');
+    const user = await User.findOne({ email }).select('+emailVerifyOtpHash');
     if (!user || user.isEmailVerified) {
       return res.json({ data: { ok: true } });
     }

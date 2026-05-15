@@ -43,7 +43,7 @@ router.post(
   loginTwoFactorPerChallengeLimiter,
   loginTwoFactor
 );
-router.get('/verify-email', verifyEmail);
+router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', resendVerificationLimiter, resendVerification);
 router.post('/refresh', refresh);
 router.post('/logout', logout);

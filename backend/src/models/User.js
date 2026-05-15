@@ -43,8 +43,8 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ['user', 'admin'], default: 'user', index: true },
 
     isEmailVerified: { type: Boolean, default: false, index: true },
-    emailVerifyTokenHash: { type: String, default: null, select: false },
-    emailVerifyTokenExpires: { type: Date, default: null },
+    emailVerifyOtpHash: { type: String, default: null, select: false },
+    emailVerifyOtpExpires: { type: Date, default: null, select: false },
 
     sessions: { type: [sessionSchema], default: [], select: false },
 
@@ -70,8 +70,8 @@ const userSchema = new mongoose.Schema(
       transform: (_doc, ret) => {
         delete ret.passwordHash;
         delete ret.sessions;
-        delete ret.emailVerifyTokenHash;
-        delete ret.emailVerifyTokenExpires;
+        delete ret.emailVerifyOtpHash;
+        delete ret.emailVerifyOtpExpires;
         delete ret.passwordChangeOtpHash;
         delete ret.passwordChangeOtpExpires;
         delete ret.passwordResetTokenHash;
@@ -86,10 +86,6 @@ const userSchema = new mongoose.Schema(
     },
   }
 );
-
-// TTL: Mongo deletes documents whose `emailVerifyTokenExpires` is in the past.
-// Verified users have this field cleared to null, so they're never deleted.
-userSchema.index({ emailVerifyTokenExpires: 1 }, { expireAfterSeconds: 0 });
 
 userSchema.methods.setPassword = async function (plain) {
   this.passwordHash = await bcrypt.hash(plain, 12);

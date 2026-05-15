@@ -27,7 +27,7 @@ type AuthState = {
     code: string;
   }) => Promise<User>;
   register: (payload: RegisterPayload) => Promise<RegisterResult>;
-  verifyEmail: (params: { token: string; id: string }) => Promise<VerifyResult>;
+  verifyEmail: (payload: { email: string; otp: string }) => Promise<VerifyResult>;
   resendVerification: (email: string) => Promise<void>;
   updateProfile: (payload: { name: string }) => Promise<User>;
   deleteAccount: (payload: { password: string }) => Promise<{
@@ -92,8 +92,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     return authService.register(payload);
   },
 
-  verifyEmail: async (params) => {
-    const result = await authService.verifyEmail(params);
+  verifyEmail: async (payload) => {
+    const result = await authService.verifyEmail(payload);
     if (result.user && !result.alreadyVerified && result.accessToken) {
       set({
         user: result.user,
