@@ -15,7 +15,9 @@
 
 # next.js
 /.next/
-/out/
+# /out/ is committed so Render can serve the prebuilt static export
+# without running `next build` (Next 16 has a /_global-error prerender bug
+# on some Node versions). Rebuild locally with `npm run build` before pushing.
 
 # production
 /build
